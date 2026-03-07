@@ -14,11 +14,16 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+
 import {
   normalizeSessionPayload,
   validateSessionPayload,
-} from '@/features/sessions/services/sessionValidation'
-import type { SessionCreatePayload, SessionFormValues } from '@/features/sessions/types'
+} from '../services/sessionValidation'
+import type {
+  SessionCreatePayload,
+  SessionFormValues,
+  SessionValidationErrors,
+} from '../types'
 
 type SessionFormDialogProps = {
   mode: 'create' | 'edit'
@@ -37,19 +42,15 @@ export function SessionFormDialog({
   isSubmitting,
   onSubmit,
 }: SessionFormDialogProps) {
-  const [values, setValues] = useState<SessionFormValues>(() => initialValues)
+  const [values, setValues] = useState<SessionFormValues>(initialValues)
+  const [fieldErrors, setFieldErrors] = useState<SessionValidationErrors>({})
   const [formError, setFormError] = useState<string | null>(null)
-  const [fieldErrors, setFieldErrors] = useState<{
-    name?: string
-    max_agents_limit?: string
-  }>({})
 
-  const title = useMemo(
-    () => (mode === 'create' ? 'Create Session' : 'Edit Session'),
-    [mode],
-  )
+  const title = useMemo(() => {
+    return mode === 'create' ? 'Create Session' : 'Edit Session'
+  }, [mode])
 
-  const submitLabel = mode === 'create' ? 'Create' : 'Save changes'
+  const submitLabel = mode === 'create' ? 'Create' : 'Save Changes'
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -78,24 +79,24 @@ export function SessionFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
-            Configure the Session control-plane settings.
+            Configure core session fields for the control plane.
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-5">
           <div className="space-y-2">
-            <Label htmlFor={`${mode}-session-name`}>Name</Label>
+            <Label htmlFor={`${mode}-session-name`}>Session Name</Label>
             <Input
               id={`${mode}-session-name`}
               value={values.name}
               onChange={(event) =>
                 setValues((current) => ({ ...current, name: event.target.value }))
               }
-              placeholder="Demo social world"
+              placeholder="Alpha Production"
               disabled={isSubmitting}
             />
             {fieldErrors.name ? (
@@ -107,6 +108,7 @@ export function SessionFormDialog({
             <Label htmlFor={`${mode}-session-description`}>Description</Label>
             <Textarea
               id={`${mode}-session-description`}
+              rows={4}
               value={values.description}
               onChange={(event) =>
                 setValues((current) => ({
@@ -115,17 +117,15 @@ export function SessionFormDialog({
                 }))
               }
               placeholder="Optional description"
-              rows={3}
               disabled={isSubmitting}
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor={`${mode}-max-agents`}>Max agents limit</Label>
+            <Label htmlFor={`${mode}-session-limit`}>Max Agents Limit</Label>
             <Input
-              id={`${mode}-max-agents`}
+              id={`${mode}-session-limit`}
               type="number"
-              inputMode="numeric"
               min={1}
               step={1}
               value={values.maxAgentsLimit}
@@ -135,20 +135,22 @@ export function SessionFormDialog({
                   maxAgentsLimit: event.target.value,
                 }))
               }
-              placeholder="1000"
               disabled={isSubmitting}
             />
             {fieldErrors.max_agents_limit ? (
-              <p className="text-sm text-destructive">
-                {fieldErrors.max_agents_limit}
-              </p>
+              <p className="text-sm text-destructive">{fieldErrors.max_agents_limit}</p>
             ) : null}
           </div>
 
           {formError ? <p className="text-sm text-destructive">{formError}</p> : null}
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={isSubmitting}
+            >
               Cancel
             </Button>
             <Button type="submit" disabled={isSubmitting}>

@@ -30,19 +30,20 @@ export function DeleteSessionDialog({
         <AlertDialogHeader>
           <AlertDialogTitle>Delete session</AlertDialogTitle>
           <AlertDialogDescription>
-            This action cannot be undone. Session <strong>{sessionName}</strong>{' '}
-            will be permanently deleted.
+            This action is irreversible. Session <strong>{sessionName}</strong> will be
+            permanently removed.
           </AlertDialogDescription>
         </AlertDialogHeader>
+
         <AlertDialogFooter>
           <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
           <AlertDialogAction
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             disabled={isDeleting}
             onClick={(event) => {
               event.preventDefault()
               void onConfirm()
             }}
-            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
           >
             {isDeleting ? 'Deleting...' : 'Delete'}
           </AlertDialogAction>
@@ -51,3 +52,4 @@ export function DeleteSessionDialog({
     </AlertDialog>
   )
 }
+

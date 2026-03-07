@@ -1,14 +1,13 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 
-import { Plus } from 'lucide-react'
 import { toast } from 'sonner'
 
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+
 import {
   SessionApiError,
   createSession,
@@ -16,21 +15,31 @@ import {
   getSessionErrorMessage,
   listSessions,
   updateSession,
-} from '@/features/sessions/services/sessionService'
+} from '../services/sessionService'
 import type {
   SessionCreatePayload,
   SessionFormValues,
   SessionListItem,
-} from '@/features/sessions/types'
-
+} from '../types'
 import { DeleteSessionDialog } from './DeleteSessionDialog'
 import { SessionFormDialog } from './SessionFormDialog'
-import { SessionsTable } from './SessionsTable'
+import { SessionStatsCards } from './SessionStatsCards'
+import { SessionsDataTable } from './SessionsDataTable'
+import { SessionsLayoutChrome } from './SessionsLayoutChrome'
+import { buildSessionsStats, filterSessionsByQuery } from './sessionPageViewModel'
 
 const EMPTY_FORM_VALUES: SessionFormValues = {
   name: '',
   description: '',
   maxAgentsLimit: '1000',
+}
+
+function toFormValues(session: SessionListItem): SessionFormValues {
+  return {
+    name: session.name,
+    description: session.description ?? '',
+    maxAgentsLimit: String(session.max_agents_limit),
+  }
 }
 
 function resolveErrorMessage(error: unknown): string {
@@ -45,27 +54,21 @@ function resolveErrorMessage(error: unknown): string {
   return getSessionErrorMessage(500)
 }
 
-function toFormValues(session: SessionListItem): SessionFormValues {
-  return {
-    name: session.name,
-    description: session.description ?? '',
-    maxAgentsLimit: String(session.max_agents_limit),
-  }
-}
-
-function LoadingState() {
+function LoadingBlock() {
   return (
-    <div className="space-y-3">
-      <Skeleton className="h-10 w-full" />
-      <Skeleton className="h-10 w-full" />
-      <Skeleton className="h-10 w-full" />
-      <Skeleton className="h-10 w-full" />
+    <div className="space-y-4">
+      <Skeleton className="h-32 w-full rounded-xl" />
+      <Skeleton className="h-72 w-full rounded-xl" />
     </div>
   )
 }
 
 export function SessionsPageClient() {
+  const router = useRouter()
+
   const [sessions, setSessions] = useState<SessionListItem[]>([])
+  const [searchQuery, setSearchQuery] = useState('')
+
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
 
@@ -76,12 +79,21 @@ export function SessionsPageClient() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
 
-  const editInitialValues = useMemo(
-    () => (editingSession ? toFormValues(editingSession) : EMPTY_FORM_VALUES),
-    [editingSession],
-  )
+  const deferredQuery = useDeferredValue(searchQuery)
 
-  const loadSessions = useCallback(async () => {
+  const filteredSessions = useMemo(() => {
+    return filterSessionsByQuery(sessions, deferredQuery)
+  }, [sessions, deferredQuery])
+
+  const stats = useMemo(() => {
+    return buildSessionsStats(filteredSessions)
+  }, [filteredSessions])
+
+  const editInitialValues = useMemo(() => {
+    return editingSession ? toFormValues(editingSession) : EMPTY_FORM_VALUES
+  }, [editingSession])
+
+  const loadSessionList = useCallback(async () => {
     setIsLoading(true)
     setLoadError(null)
 
@@ -96,8 +108,8 @@ export function SessionsPageClient() {
   }, [])
 
   useEffect(() => {
-    void loadSessions()
-  }, [loadSessions])
+    void loadSessionList()
+  }, [loadSessionList])
 
   async function handleCreate(payload: SessionCreatePayload) {
     setIsSubmitting(true)
@@ -106,7 +118,7 @@ export function SessionsPageClient() {
       await createSession(payload)
       toast.success('Session created.')
       setIsCreateOpen(false)
-      await loadSessions()
+      await loadSessionList()
     } catch (error) {
       const message = resolveErrorMessage(error)
       toast.error(message)
@@ -127,7 +139,7 @@ export function SessionsPageClient() {
       await updateSession(editingSession.session_id, payload)
       toast.success('Session updated.')
       setEditingSession(null)
-      await loadSessions()
+      await loadSessionList()
     } catch (error) {
       const message = resolveErrorMessage(error)
       toast.error(message)
@@ -148,7 +160,7 @@ export function SessionsPageClient() {
       await deleteSession(deletingSession.session_id)
       toast.success('Session deleted.')
       setDeletingSession(null)
-      await loadSessions()
+      await loadSessionList()
     } catch (error) {
       const message = resolveErrorMessage(error)
       toast.error(message)
@@ -158,62 +170,48 @@ export function SessionsPageClient() {
     }
   }
 
+  function handleView(session: SessionListItem) {
+    router.push(`/sessions/${session.session_id}`)
+  }
+
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-6 px-4 py-8 md:px-8">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Session Management</h1>
-          <p className="text-sm text-muted-foreground">
-            Manage Session resources and inspect control-plane records.
-          </p>
-        </div>
+    <SessionsLayoutChrome
+      totalSessions={sessions.length}
+      searchQuery={searchQuery}
+      onSearchChange={setSearchQuery}
+      onCreateSession={() => setIsCreateOpen(true)}
+    >
+      <SessionStatsCards
+        activeSessions={stats.activeSessions}
+        totalCapacity={stats.totalCapacity}
+        averageCapacity={stats.averageCapacity}
+      />
 
-        <div className="flex items-center gap-3">
-          <Badge variant="secondary">Total: {sessions.length}</Badge>
-          <Button onClick={() => setIsCreateOpen(true)}>
-            <Plus className="size-4" />
-            Create Session
+      {isLoading ? <LoadingBlock /> : null}
+
+      {!isLoading && loadError ? (
+        <section className="rounded-xl border border-destructive/40 bg-destructive/5 p-5">
+          <p className="text-sm text-destructive">{loadError}</p>
+          <Button
+            variant="outline"
+            className="mt-4"
+            onClick={() => {
+              void loadSessionList()
+            }}
+          >
+            Retry
           </Button>
-        </div>
-      </header>
+        </section>
+      ) : null}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Sessions</CardTitle>
-          <CardDescription>
-            Fields follow API contract: <code>session_id</code>, <code>name</code>,{' '}
-            <code>description</code>, and <code>max_agents_limit</code>.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? <LoadingState /> : null}
-
-          {!isLoading && loadError ? (
-            <div className="flex flex-col items-start gap-4 rounded-md border border-destructive/30 bg-destructive/5 p-4">
-              <p className="text-sm text-destructive">{loadError}</p>
-              <Button variant="outline" onClick={() => void loadSessions()}>
-                Retry
-              </Button>
-            </div>
-          ) : null}
-
-          {!isLoading && !loadError && sessions.length === 0 ? (
-            <div className="rounded-md border border-dashed p-10 text-center">
-              <p className="text-sm text-muted-foreground">
-                No session found. Create your first session to start.
-              </p>
-            </div>
-          ) : null}
-
-          {!isLoading && !loadError && sessions.length > 0 ? (
-            <SessionsTable
-              sessions={sessions}
-              onEdit={setEditingSession}
-              onDelete={setDeletingSession}
-            />
-          ) : null}
-        </CardContent>
-      </Card>
+      {!isLoading && !loadError ? (
+        <SessionsDataTable
+          sessions={filteredSessions}
+          onView={handleView}
+          onEdit={setEditingSession}
+          onDelete={setDeletingSession}
+        />
+      ) : null}
 
       <SessionFormDialog
         key={isCreateOpen ? 'create-open' : 'create-closed'}
@@ -250,6 +248,6 @@ export function SessionsPageClient() {
         isDeleting={isDeleting}
         onConfirm={handleDelete}
       />
-    </main>
+    </SessionsLayoutChrome>
   )
 }

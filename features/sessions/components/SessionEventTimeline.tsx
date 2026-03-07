@@ -1,7 +1,8 @@
 'use client'
 
+import { Filter, Settings2 } from 'lucide-react'
+
 import { Button } from '@/components/ui/button'
-import { Separator } from '@/components/ui/separator'
 import type { SessionEventItem } from '@/features/sessions/types'
 
 import { SessionEventCard } from './SessionEventCard'
@@ -21,40 +22,51 @@ export function SessionEventTimeline({
   loadMoreError,
   onLoadMore,
 }: SessionEventTimelineProps) {
-  if (events.length === 0) {
-    return (
-      <div className="rounded-md border border-dashed p-10 text-center">
-        <p className="text-sm text-muted-foreground">
-          No events found in this session.
-        </p>
-      </div>
-    )
-  }
-
   return (
-    <div className="space-y-4">
-      {events.map((event, index) => (
-        <div key={event.event_id} className="space-y-4">
-          <SessionEventCard event={event} />
-          {index !== events.length - 1 ? <Separator /> : null}
+    <section className="flex flex-col gap-4">
+      <div className="flex items-center justify-between px-1">
+        <h3 className="flex items-center gap-2 text-lg font-bold tracking-tight">
+          Activity Stream
+        </h3>
+        <div className="flex items-center gap-2">
+          <Button size="icon-sm" variant="ghost" aria-label="Filter events">
+            <Filter className="size-4" />
+          </Button>
+          <Button size="icon-sm" variant="ghost" aria-label="Event settings">
+            <Settings2 className="size-4" />
+          </Button>
         </div>
-      ))}
+      </div>
+
+      {events.length === 0 ? (
+        <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
+          No activities found in this session.
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {events.map((event) => (
+            <SessionEventCard key={event.event_id} event={event} />
+          ))}
+        </div>
+      )}
 
       {loadMoreError ? <p className="text-sm text-destructive">{loadMoreError}</p> : null}
 
       {hasMore ? (
         <Button
           variant="outline"
+          className="w-fit"
           disabled={isLoadingMore}
           onClick={() => {
             void onLoadMore()
           }}
         >
-          {isLoadingMore ? 'Loading...' : 'Load more'}
+          {isLoadingMore ? 'Loading...' : 'Load more events'}
         </Button>
       ) : (
         <p className="text-xs text-muted-foreground">No more events.</p>
       )}
-    </div>
+    </section>
   )
 }
+
